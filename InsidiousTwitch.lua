@@ -2,9 +2,13 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.2
+local LocalVersion = 1.25
 
 local UpdateURL = ""
+
+function TwitchMessage(msg)
+	print("<font color=\"#00f0ff\"><b>Insidious Twitch:</b></font><font color=\"#ffffff\"> "..msg.."</font>")
+end
 
 AutoUpdater(LocalVersion, 
  true, 
@@ -12,10 +16,10 @@ AutoUpdater(LocalVersion,
  "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.ver.lua", 
  "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.lua".. "?no-cache=".. math.random(9999, 1001020201), 
  SCRIPT_PATH .. "InsidiousTwitch.lua", 
- function() print("<font color=\"#FF0000\"> Update found</font><font color=\"#FFFFFF\"> - </font><font color=\"#00FF00\">starting update! </font>") return end, 
- function() print("<font color=\"#00FF00\"> Up to date! </font>") return end, 
- function() print("<font color=\"#FF0000\"> Update found! </font>") return end, 
- function() print("FAILED UPDATE!") return end)
+ function() TwitchMessage("Update completed successfully!") return end, 
+ function() TwitchMessage("You are up to date!") return end, 
+ function() TwitchMessage("Update found - starting update!") return end, 
+ function() TwitchMessage("Failed to update!") return end)
 
 if not pcall( require, "OpenPredict" ) then PrintChat("Please install OpenPredict!") return end
 
