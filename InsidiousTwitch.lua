@@ -8,7 +8,7 @@ local UpdateURL = ""
 
 AutoUpdater(LocalVersion, 
  true, 
- raw.githubusercontent.com, 
+ "raw.githubusercontent.com", 
  "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.ver.lua", 
  "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.lua", 
  SCRIPT_PATH .. "InsidiousTwitch.lua", 
