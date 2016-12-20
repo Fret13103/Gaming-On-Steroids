@@ -2,17 +2,20 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local version = 1
+local LocalVersion = 1
 
 local UpdateURL = ""
 
-function AutoUpdate(versiontracker)
-	if tonumber(versiontracker) > tonumber(version)
-		PrintChat("<font color=#\"FFFFFF\"><b> Found new version! </b></font>".. versiontracker)
-		DownloadFileAsync(UpdateURL, SCRIPT_PATH .. "InsidiousTwitch.lua", function() PrintChat("<font color=#\"00FF00\">Update completed! Press f6 twice. </font>") return end)
-	end
-end
-GetWebResultAsync("https://raw.githubusercontent.com/Fret13103/", function() end)
+AutoUpdater(LocalVersion, 
+ true, 
+ raw.githubusercontent.com, 
+ "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.ver.lua", 
+ "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.lua", 
+ SCRIPT_PATH .. "InsidiousTwitch.lua", 
+ function() print("UPDATE!") return end, 
+ function() print("NO UPDATE!") return end, 
+ function() print("THERE IS A NEW VERSION!") return end, 
+ function() print("FAILED UPDATE!") return end)
 
 if not pcall( require, "OpenPredict" ) then PrintChat("Please install OpenPredict!") return end
 
