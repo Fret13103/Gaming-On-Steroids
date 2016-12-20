@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.25
+local LocalVersion = 1.3
 
 local UpdateURL = ""
 
@@ -26,8 +26,8 @@ if not pcall( require, "OpenPredict" ) then PrintChat("Please install OpenPredic
 local buffunits = {} --{unit, stacks}
 
 local skills = {
-	W = { delay = 0.1, speed = 1400, width = 55, range = 950, radius = 275 },
-	E = {	range = 1200}
+	W = { delay = 0.1, speed = 1400, width = 55, range = 950, radius = 275},
+	E = { range = 1200 }
 }
 
 local itemconstants = {ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}
@@ -36,6 +36,14 @@ local items = {trinket = 3363, bork = 3153, cutlass = 3144, youmuus = 3142}
 local storepos = Vector(400, 182, 400)
 
 local mainMenu = Menu("twitch", "Insidious Twitch")
+
+local orbwalker = "Disabled"
+
+mainMenu:SubMenu("qconfig", "Twitch: Q")
+mainMenu.qconfig:Boolean("Youmuus", "Youmuus in combat after stealth", true)
+mainMenu.qconfig:Boolean("drawQrange", "Draw Q range", true)
+mainMenu.qconfig:Boolean("drawQmap", "Draw Q on map", true)
+
 mainMenu:SubMenu("econfig", "Twitch: E")
 mainMenu.econfig:Boolean("KillE", "Use E to kill champions", true)
 mainMenu.econfig:Boolean("StacksE", "Use E at 6 stacks", true)
@@ -48,6 +56,7 @@ mainMenu.econfig:Slider("KillMinionsNumber", "E to kill x minions", 3, 1, 5, 1)
 
 mainMenu:SubMenu("wconfig", "Twitch: W")
 mainMenu.wconfig:Boolean("ComboW", "Use W in combo", true)
+mainMenu.wconfig:Boolean("BlockW", "Block W use while ulting", false)
 mainMenu.wconfig:Boolean("GapcloseW", "Antigapclose W", true)
 mainMenu.wconfig:Slider("HitchanceW", "W hitchance", 0, .01, 1, .01)
 
@@ -56,6 +65,11 @@ mainMenu.wconfig:Info("separator", "Laneclear") --SEPARATOR
 
 mainMenu.wconfig:Boolean("laneclearW", "Use W in laneclear", true)
 mainMenu.wconfig:Slider("SplashMinionsNumber", "W to poison x minions", 4, 1, 7, 1)
+
+mainMenu:SubMenu("autolevel", "Twitch: Autolevel")
+mainMenu.autolevel:Boolean("allowLeveling", "Autolevel skills", true)
+mainMenu.autolevel:Slider("skillOrder", "Skill order priority", 2, 1, 2, 1)
+mainMenu.autolevel:Info("displayOrder", "Skill order is: E")
 
 
 mainMenu:SubMenu("keyconfig", "Twitch: Keys")
@@ -67,6 +81,69 @@ local shop = nil
 
 --BuyItem(ID)
 
+local isAttacking = false
+
+local SkillOrders = {
+	{_E,_W,_Q, _E, _E, _R,_E,_Q,_E,_Q,_R,_Q,_Q,_W,_W,_R,_W,_W},
+	{_E,_W,_Q, _E, _E, _R,_E,_W,_E,_W,_R,_W,_W,_Q,_Q,_R,_Q,_Q}
+	}
+
+class "autolevel"
+
+function autolevel:__init() -- I would've done self.SkillOrders but it always returned nil... ?!?
+	OnTick(function() autolevel:Tick() end)
+end
+
+function autolevel:displayPriority()
+	if mainMenu.autolevel.skillOrder:Value() == 1 then
+		mainMenu.autolevel.displayOrder.name = "Skill order is: ".. "EQW"
+	elseif mainMenu.autolevel.skillOrder:Value() == 2 then
+		mainMenu.autolevel.displayOrder.name = "Skill order is: ".. "EWQ"
+	end
+end
+
+function autolevel:Tick()
+	self:displayPriority()
+
+	if SkillOrders == nil then print("Skillorder nil error") return end
+
+	if GetLevelPoints(myHero) > 0 and mainMenu.autolevel.allowLeveling:Value() then
+		if (myHero.level + 1 - GetLevelPoints(myHero)) then
+			LevelSpell(SkillOrders[mainMenu.autolevel.skillOrder:Value()-1][myHero.level + 1 - GetLevelPoints(myHero)])
+		end
+	end
+end
+
+function DrawCircleMinimap(origin, radius, color)
+  local MapData = {
+    [SUMMONERS_RIFT] = {min = {x = -120, z = -120}, max = {x = 14870, z = 14980}},
+    [TWISTED_TREELINE] = {min = {x = 0, z = 0}, max = {x = 15398, z = 15398}},
+    [CRYSTAL_SCAR] = {min = {x = 0, z = 0}, max = {x = 13987, z = 13987}},
+    [HOWLING_ABYSS] = {min = {x = -28, z = -19}, max = {x = 12849, z = 12858}},
+  }
+  local p1 = WorldToMinimap(origin.x + radius, origin.y, origin.z)
+  local step = math.pi / (radius * 0.05)
+  local bF = false
+ 
+  for theta = 0, 2 * math.pi + step, step do
+    local x, y = origin.x + math.cos(theta) * radius, origin.z - math.sin(theta) * radius
+ 
+    if x > MapData[GetMapID()].min.x and y > MapData[GetMapID()].min.z and x < MapData[GetMapID()].max.x and y < MapData[GetMapID()].max.z then
+      local p2 = WorldToMinimap(x, 0, y)
+ 
+      if not bF then
+        DrawLine(p1.x, p1.y, p2.x, p2.y, 1, color)
+      end
+      p1, bF = p2, false
+    else
+      bF = true
+    end
+  end
+end
+
+function IsAutoAttacking()
+
+end
 
 function findBuffUnit(unit)
 	for i, buffunit in pairs(buffunits) do
@@ -84,6 +161,56 @@ function findBuffUnitIndex(unit)
 		end
 	end
 	return nil
+end
+
+local qduration = {10,11,12,13,14}
+local lastQCastTime = GetGameTimer()
+local hasQBuff = false
+
+function DrawQDistanceAvailable()
+	if GetCastLevel(myHero, 0) == 0 then return end
+	if not mainMenu.qconfig.drawQrange:Value() then return end
+	if not hasQBuff then
+		lastQCastTime = GetGameTimer()
+	end
+
+	local qtimeleft = --[[qduration[GetCastLevel(myHero, 0)] - (qduration[GetCastLevel(myHero, 0)] -]] qduration[GetCastLevel(myHero, 0)] - (GetGameTimer() - lastQCastTime)
+	local distleft = qtimeleft * GetMoveSpeed(myHero)
+
+	DrawCircle(GetOrigin(myHero), distleft, 1, 10, GoS.Red)
+	--DrawCircleMinimap(GetOrigin(myHero), distleft, GoS.Red)
+	--local time = GetBuffExpireTime - GetBuffStartTime
+end
+
+function DrawQDistanceMinimap()
+	if GetCastLevel(myHero, 0) == 0 then return end
+	if not mainMenu.qconfig.drawQmap:Value() then return end
+	if not hasQBuff then
+		lastQCastTime = GetGameTimer()
+	end
+	if not hasQBuff then
+		lastQCastTime = GetGameTimer()
+	end
+	local qtimeleft = --[[qduration[GetCastLevel(myHero, 0)] - (qduration[GetCastLevel(myHero, 0)] -]] qduration[GetCastLevel(myHero, 0)] - (GetGameTimer() - lastQCastTime)
+	local distleft = qtimeleft * GetMoveSpeed(myHero)
+
+	DrawCircleMinimap(GetOrigin(myHero), distleft, GoS.Red)
+end
+
+function Ghostblade()
+	for i, item in pairs(itemconstants) do
+		local bork = nil
+		if GetItemID(myHero, item) == items.bork then
+			bork = item
+		elseif GetItemID(myHero, item) == items.cutlass then
+			bork = item
+		end
+		if bork ~= nil then
+			if CanUseSpell(myHero, item) == 0 and ValidTarget(GetCurrentTarget()) then
+				CastTargetSpell(GetCurrentTarget(), item)
+			end
+		end
+	end
 end
 
 function PrintItems()
@@ -138,8 +265,14 @@ end
 
 function TryW()
 	if ValidTarget(GetCurrentTarget()) then
-		if CanUseSpell(myHero, 1) and WCanHit(GetCurrentTarget()) and mainMenu.keyconfig.combo:Value() then
-			CastSkillShot(1, WCanHit(GetCurrentTarget()))
+		if not isulting then
+			if CanUseSpell(myHero, 1) and WCanHit(GetCurrentTarget()) and mainMenu.keyconfig.combo:Value() then
+				CastSkillShot(1, WCanHit(GetCurrentTarget()))
+			end
+		elseif mainMenu.wconfig.BlockW:Value() == false then
+			if CanUseSpell(myHero, 1) and WCanHit(GetCurrentTarget()) and mainMenu.keyconfig.combo:Value() then
+				CastSkillShot(1, WCanHit(GetCurrentTarget()))
+			end
 		end
 	end
 end
@@ -180,7 +313,7 @@ function ExpungeToKill()
 			local buffedunit = findBuffUnit(enemy)
 			if buffedunit then
 				local dmg = CalcExpungeDamage(buffedunit)
-				if dmg and enemy.health and dmg > enemy.health and CanUseSpell(myHero, 2) and mainMenu.econfig.KillE:Value() then
+				if dmg and enemy.health and dmg > enemy.health + enemy.shieldAD and CanUseSpell(myHero, 2) and mainMenu.econfig.KillE:Value() then
 					CastSpell(2)
 				end
 			end
@@ -208,19 +341,25 @@ end
 
 OnLoad(function()
 	PrintChat("<font color=\"#00f0ff\"><b>Insidious Twitch:</b></font><font color=\"#ffffff\"> loaded!</font>")
+	autolevel()
+	local orbwalker =  {"Disabled", "IOW", "DAC", "Platywalk", "GoSWalk"}
+	orbwalker = orbwalker[mc_cfg_orb.orb:Value()]
 end)
 
 OnUpdateBuff(function(unit, buff)
-	if ValidTarget(unit, 1000) then
-		if buff.Name == "TwitchDeadlyVenom" then
-			buffedUnit = findBuffUnit(unit)
-			if buffedUnit then
-				buffedUnit[2] = buffedUnit[2] < 6 and buffedUnit[2] + 1 or 6
-			else
-				local newBuffedUnit = {unit, 1}
-				table.insert(buffunits, newBuffedUnit)
-			end
+	if buff.Name == "TwitchDeadlyVenom" then
+		buffedUnit = findBuffUnit(unit)
+		if buffedUnit then
+			buffedUnit[2] = buffedUnit[2] < 6 and buffedUnit[2] + 1 or 6
+		else
+			local newBuffedUnit = {unit, 1}
+			table.insert(buffunits, newBuffedUnit)
 		end
+	elseif buff.Name == "TwitchHideInShadows" then
+		lastQCastTime = GetGameTimer()
+		hasQBuff = true
+	elseif buff.Name == "TwitchFullAutomatic" then
+		isulting = true
 	end
 end)
 
@@ -230,11 +369,17 @@ OnRemoveBuff(function(unit, buff)
 		if buffedUnitIndex then
 			table.remove(buffunits, buffedUnitIndex)
 		end
+	elseif buff.Name == "TwitchHideInShadows" then
+		hasQBuff = false
+	elseif buff.Name == "TwitchFullAutomatic" then
+		isulting = false
 	end
 end)
 
 OnWndMsg(function(Msg, Key)
-	if Key == string.byte("B") and Msg == 256 and not IsChatOpened() then
+	if IsChatOpened() then return end 
+
+	if Key == string.byte("B") and Msg == 256 then
 		if CanUseSpell(myHero, 0) then
 			CastSpell(0)
 		end
@@ -251,7 +396,8 @@ end)
 
 OnTick(function()
 	--coroutine.resume(coroutine.create(function()  attempt to index global 'coroutine' a nil value?!
-	if shop and myHero:DistanceTo(shop) <= 800 and GetLevel(myHero) >= 9 then
+
+	if shop and myHero:DistanceTo(shop) <= 1000 and GetLevel(myHero) >= 9 then
 		BuyItem(items.trinket)
 	end
 	--killsteal functions
@@ -260,7 +406,10 @@ OnTick(function()
 	--combo functions
 	if mainMenu.keyconfig.combo:Value() then
 		ExpungeOnStacked()
-		TryW()
+		if not isAttacking and not hasQBuff then
+			TryW()
+		end
+		Ghostblade()
 	end
 
 	if mainMenu.keyconfig.clear:Value() then
@@ -270,7 +419,24 @@ OnTick(function()
 	--end))
 end)
 
+OnProcessSpellAttack(function(unit, spell)
+	if unit == myHero and spell.name:find("Attack") then
+		--print(spell.name)
+		isAttacking = true
+	end
+end)
+
+OnProcessSpellComplete(function(unit, spell)
+	if unit == myHero and spell.name:find("Attack") then
+		isAttacking = false
+		if mainMenu.keyconfig.combo:Value() then
+			TryW()
+		end
+	end
+end)
+
 OnDraw(function()
+	DrawQDistanceAvailable()
 	for i, enemy in pairs(GetEnemyHeroes()) do
 		if ValidTarget(enemy) and CanUseSpell(myHero, 2) and findBuffUnit(enemy) then
 
@@ -281,4 +447,8 @@ OnDraw(function()
 			DrawDmgOverHpBar(enemy, enemy.health, 100, 0, GoS.Red)
 		end
 	end
+end)
+
+OnDrawMinimap(function()
+DrawQDistanceMinimap()
 end)
