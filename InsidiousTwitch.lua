@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1
+local LocalVersion = 1.1
 
 local UpdateURL = ""
 
