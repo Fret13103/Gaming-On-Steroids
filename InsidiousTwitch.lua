@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.3
+local LocalVersion = 1.4
 
 local UpdateURL = ""
 
@@ -177,7 +177,7 @@ function DrawQDistanceAvailable()
 	local qtimeleft = --[[qduration[GetCastLevel(myHero, 0)] - (qduration[GetCastLevel(myHero, 0)] -]] qduration[GetCastLevel(myHero, 0)] - (GetGameTimer() - lastQCastTime)
 	local distleft = qtimeleft * GetMoveSpeed(myHero)
 
-	DrawCircle(GetOrigin(myHero), distleft, 1, 10, GoS.Red)
+	DrawCircle(GetOrigin(myHero), distleft, 1, 10, GoS.White)
 	--DrawCircleMinimap(GetOrigin(myHero), distleft, GoS.Red)
 	--local time = GetBuffExpireTime - GetBuffStartTime
 end
@@ -194,7 +194,7 @@ function DrawQDistanceMinimap()
 	local qtimeleft = --[[qduration[GetCastLevel(myHero, 0)] - (qduration[GetCastLevel(myHero, 0)] -]] qduration[GetCastLevel(myHero, 0)] - (GetGameTimer() - lastQCastTime)
 	local distleft = qtimeleft * GetMoveSpeed(myHero)
 
-	DrawCircleMinimap(GetOrigin(myHero), distleft, GoS.Red)
+	DrawCircleMinimap(GetOrigin(myHero), distleft, GoS.White)
 end
 
 function Ghostblade()
@@ -340,7 +340,7 @@ function CalcArmor(target)
 end
 
 OnLoad(function()
-	PrintChat("<font color=\"#00f0ff\"><b>Insidious Twitch:</b></font><font color=\"#ffffff\"> loaded!</font>")
+	TwitchMessage("<font color=\"#00f0ff\"><b>Insidious Twitch:</b></font><font color=\"#ffffff\"> loaded!</font>")
 	autolevel()
 	local orbwalker =  {"Disabled", "IOW", "DAC", "Platywalk", "GoSWalk"}
 	orbwalker = orbwalker[mc_cfg_orb.orb:Value()]
@@ -406,7 +406,7 @@ OnTick(function()
 	--combo functions
 	if mainMenu.keyconfig.combo:Value() then
 		ExpungeOnStacked()
-		if not isAttacking and not hasQBuff then
+		if not isAttacking and not hasQBuff and myHero:DistanceTo(GetCurrentTarget()) >= GetRange(myHero) then
 			TryW()
 		end
 		Ghostblade()
@@ -444,7 +444,7 @@ OnDraw(function()
 
 			if not eDmg then eDmg = 0 end
 
-			DrawDmgOverHpBar(enemy, enemy.health, 100, 0, GoS.Red)
+			DrawDmgOverHpBar(enemy, enemy.health, 100, 0, GoS.Blue)
 		end
 	end
 end)
