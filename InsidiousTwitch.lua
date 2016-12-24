@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.5
+local LocalVersion = 1.6
 
 local UpdateURL = ""
 
@@ -75,6 +75,7 @@ mainMenu.autolevel:Info("displayOrder", "Skill order is: E")
 mainMenu:SubMenu("keyconfig", "Twitch: Keys")
 mainMenu.keyconfig:Key("combo", "Combo key", string.byte(" "))
 mainMenu.keyconfig:Key("clear", "Lane & Jungle clear", string.byte("V"))
+mainMenu.keyconfig:Key("recall", "Please set this to your recall key", string.byte("B"))
 
 local shop = nil
 --IsChatOpen? IsChatOpened?
@@ -113,7 +114,7 @@ function autolevel:Tick()
 
 	if GetLevelPoints(myHero) > 0 and mainMenu.autolevel.allowLeveling:Value() then
 		if (myHero.level + 1 - GetLevelPoints(myHero)) then
-			LevelSpell(SkillOrders[mainMenu.autolevel.skillOrder:Value()-1][myHero.level + 1 - GetLevelPoints(myHero)])
+			LevelSpell(SkillOrders[mainMenu.autolevel.skillOrder:Value()][myHero.level + 1 - GetLevelPoints(myHero)])
 		end
 	end
 end
@@ -351,7 +352,7 @@ OnLoad(function()
 end)
 
 OnUpdateBuff(function(unit, buff)
-	if buff.Name == "TwitchDeadlyVenom" then
+	if buff.Name == "TwitchDeadlyVenom" and unit.team ~= myHero.team then
 		buffedUnit = findBuffUnit(unit)
 		if buffedUnit then
 			buffedUnit[2] = buffedUnit[2] < 6 and buffedUnit[2] + 1 or 6
@@ -359,16 +360,31 @@ OnUpdateBuff(function(unit, buff)
 			local newBuffedUnit = {unit, 1}
 			table.insert(buffunits, newBuffedUnit)
 		end
-	elseif buff.Name == "TwitchHideInShadows" and unit == myHero then
+	elseif buff.Name == "TwitchHideInShadows" and unit.networkID == myHero.networkID then
 		lastQCastTime = GetGameTimer()
 		hasQBuff = true
-	elseif buff.Name == "TwitchFullAutomatic" and unit == myHero then
+	elseif buff.Name == "TwitchFullAutomatic" and unit.networkID == myHero.networkID then
 		isulting = true
 
-	elseif buff.Name:lower():find("recall") and unit == myHero then
+	--[[elseif buff.Name == "recall" and unit.networkID == myHero.networkID then
 		if CanCast(myHero, 0) then
+			CastSpell(0)
+		end]]
+	end
+end)
 
-		end
+--[[OnAnimation(function(unit, animation)
+	if unit.networkID ~= myHero.networkID then return end
+
+
+	if animation:lower():find("recall") and CanCast(myHero, 0) or animation == "Recall" and CanCast(myHero, 0) then
+		DelayAction(function() CastTargetSpell(myHero, 0) print("lol") end, .5)
+	end
+end) You can't cast using OnAnimation, it refuses to cast abilities]]
+
+OnSpellCast(function(spell)
+	if spell.spellID == 13 and spell.targetID == myHero.networkID then
+		CastSpell(0)
 	end
 end)
 
@@ -390,8 +406,9 @@ OnWndMsg(function(Msg, Key)
 
 	--[[if Key == string.byte("B") and Msg == 256 then
 		if CanCast(myHero, 0) then
-			CastSpell(0)
+			--CastSpell(0)
 		end
+		--This is THE ONLY method of stealth before recall outside of blocking recall packet, sending q cast then sending recall packet.
 	else]]if Key == string.byte("I") and Msg == 256 then
 		PrintItems()
 	end
@@ -409,6 +426,10 @@ OnTick(function()
 	if shop and myHero:DistanceTo(shop) <= 1000 and GetLevel(myHero) >= 9 then
 		BuyItem(items.trinket)
 	end
+	--[[if mainMenu.keyconfig.recall:Value() and CanCast(myHero, 0) then
+		CastSpell(0)
+		this is also too slow
+	end]]
 	--killsteal functions
 	ExpungeToKill()
 
