@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.4
+local LocalVersion = 1.5
 
 local UpdateURL = ""
 
@@ -87,6 +87,10 @@ local SkillOrders = {
 	{_E,_W,_Q, _E, _E, _R,_E,_Q,_E,_Q,_R,_Q,_Q,_W,_W,_R,_W,_W},
 	{_E,_W,_Q, _E, _E, _R,_E,_W,_E,_W,_R,_W,_W,_Q,_Q,_R,_Q,_Q}
 	}
+
+function CanCast(char, slot)
+	return CanUseSpell(char, slot) == 0
+end
 
 class "autolevel"
 
@@ -206,7 +210,7 @@ function Ghostblade()
 			bork = item
 		end
 		if bork ~= nil then
-			if CanUseSpell(myHero, item) == 0 and ValidTarget(GetCurrentTarget()) then
+			if CanCast(myHero, item) == 0 and ValidTarget(GetCurrentTarget()) then
 				CastTargetSpell(GetCurrentTarget(), item)
 			end
 		end
@@ -245,7 +249,7 @@ function WClearMinions()
 				if v:DistanceTo(addvalue) < skills.W.radius then
 					numhit = numhit + 1
 				end 
-				if numhit >= minhit and CanUseSpell(myHero, 1) then
+				if numhit >= minhit and CanCast(myHero, 1) then
 					CastSkillShot(1, addvalue)
 				end
 			end
@@ -266,11 +270,11 @@ end
 function TryW()
 	if ValidTarget(GetCurrentTarget()) then
 		if not isulting then
-			if CanUseSpell(myHero, 1) and WCanHit(GetCurrentTarget()) and mainMenu.keyconfig.combo:Value() then
+			if CanCast(myHero, 1) and WCanHit(GetCurrentTarget()) and mainMenu.keyconfig.combo:Value() then
 				CastSkillShot(1, WCanHit(GetCurrentTarget()))
 			end
 		elseif mainMenu.wconfig.BlockW:Value() == false then
-			if CanUseSpell(myHero, 1) and WCanHit(GetCurrentTarget()) and mainMenu.keyconfig.combo:Value() then
+			if CanCast(myHero, 1) and WCanHit(GetCurrentTarget()) and mainMenu.keyconfig.combo:Value() then
 				CastSkillShot(1, WCanHit(GetCurrentTarget()))
 			end
 		end
@@ -292,7 +296,7 @@ function EKillMinions()
 				end
 			end
 		end
-		if numkill > minkill and CanUseSpell(myHero, 2) then
+		if numkill > minkill and CanCast(myHero, 2) then
 			CastSpell(2)
 		end
 	end
@@ -301,7 +305,7 @@ end
 function ExpungeOnStacked()
 	for i, enemy in pairs(GetEnemyHeroes()) do
 		local buffedUnit = findBuffUnit(enemy)
-		if buffedUnit and buffedUnit[2] == 6 and CanUseSpell(myHero, 2) and ValidTarget(enemy, skills.E.range) and mainMenu.keyconfig.combo and mainMenu.econfig.StacksE:Value() then
+		if buffedUnit and buffedUnit[2] == 6 and CanCast(myHero, 2) and ValidTarget(enemy, skills.E.range) and mainMenu.keyconfig.combo and mainMenu.econfig.StacksE:Value() then
 			CastSpell(2)
 		end
 	end
@@ -313,7 +317,7 @@ function ExpungeToKill()
 			local buffedunit = findBuffUnit(enemy)
 			if buffedunit then
 				local dmg = CalcExpungeDamage(buffedunit)
-				if dmg and enemy.health and dmg > enemy.health + enemy.shieldAD and CanUseSpell(myHero, 2) and mainMenu.econfig.KillE:Value() then
+				if dmg and enemy.health and dmg > enemy.health + enemy.shieldAD and CanCast(myHero, 2) and mainMenu.econfig.KillE:Value() then
 					CastSpell(2)
 				end
 			end
@@ -340,7 +344,7 @@ function CalcArmor(target)
 end
 
 OnLoad(function()
-	TwitchMessage("<font color=\"#00f0ff\"><b>Insidious Twitch:</b></font><font color=\"#ffffff\"> loaded!</font>")
+	TwitchMessage("loaded!")
 	autolevel()
 	local orbwalker =  {"Disabled", "IOW", "DAC", "Platywalk", "GoSWalk"}
 	orbwalker = orbwalker[mc_cfg_orb.orb:Value()]
@@ -355,11 +359,16 @@ OnUpdateBuff(function(unit, buff)
 			local newBuffedUnit = {unit, 1}
 			table.insert(buffunits, newBuffedUnit)
 		end
-	elseif buff.Name == "TwitchHideInShadows" then
+	elseif buff.Name == "TwitchHideInShadows" and unit == myHero then
 		lastQCastTime = GetGameTimer()
 		hasQBuff = true
-	elseif buff.Name == "TwitchFullAutomatic" then
+	elseif buff.Name == "TwitchFullAutomatic" and unit == myHero then
 		isulting = true
+
+	elseif buff.Name:lower():find("recall") and unit == myHero then
+		if CanCast(myHero, 0) then
+
+		end
 	end
 end)
 
@@ -379,11 +388,11 @@ end)
 OnWndMsg(function(Msg, Key)
 	if IsChatOpened() then return end 
 
-	if Key == string.byte("B") and Msg == 256 then
-		if CanUseSpell(myHero, 0) then
+	--[[if Key == string.byte("B") and Msg == 256 then
+		if CanCast(myHero, 0) then
 			CastSpell(0)
 		end
-	elseif Key == string.byte("I") and Msg == 256 then
+	else]]if Key == string.byte("I") and Msg == 256 then
 		PrintItems()
 	end
 end)
@@ -438,7 +447,7 @@ end)
 OnDraw(function()
 	DrawQDistanceAvailable()
 	for i, enemy in pairs(GetEnemyHeroes()) do
-		if ValidTarget(enemy) and CanUseSpell(myHero, 2) and findBuffUnit(enemy) then
+		if ValidTarget(enemy) and CanCast(myHero, 2) and findBuffUnit(enemy) then
 
 			local eDmg = CalcExpungeDamage(findBuffUnit(enemy)) 
 
