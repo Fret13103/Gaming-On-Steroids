@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.6
+local LocalVersion = 1.7
 
 local UpdateURL = ""
 
@@ -91,6 +91,102 @@ local SkillOrders = {
 
 function CanCast(char, slot)
 	return CanUseSpell(char, slot) == 0
+end
+
+function EnemyData(char, lastseen, lastpos)
+	return {Hero = char, LastSeen = lastseen, LastPos = lastpos}
+end
+
+local vishandle
+
+class "VisionHandler"
+
+function VisionHandler:__init()
+	self.VisibleEnemies = {}
+	self.EnemyDatas = {}
+	self.BlueTrinketID = 3363
+	self.DefaultTrinketID = 3340
+
+
+	for i, unit in pairs(GetEnemyHeroes()) do
+		table.insert(self.EnemyDatas, EnemyData(unit, GetGameTimer(), Vector(0,0,0)))
+	end
+
+	OnTick(function() self:Tick() end)
+end
+
+function VisionHandler:GetVisibleEnemies()
+	local visibles = {}
+	for i, unit in pairs(GetEnemyHeroes()) do
+		if unit.visible then
+			table.insert(visibles, unit)
+		end
+	end
+	return visibles
+end
+
+function VisionHandler:Tick()
+	for _, enemy in pairs(self:GetVisibleEnemies()) do
+		local contains = false
+		for i, enemydata in pairs(self.EnemyDatas) do
+			if enemydata.Hero.networkID == enemy.networkID then
+				contains = true
+				enemydata.LastSeen = GetGameTimer()
+			end
+		end
+		if contains == false then
+			table.insert(self.EnemyDatas, EnemyData(unit, GetGameTimer(), GetOrigin(enemy)))
+		end
+	end
+	self:WardMissing()
+end
+
+function VisionHandler:LastSeenTime(unit)
+	for _, enemydata in pairs(self.EnemyDatas) do
+		if enemydata.Hero.networkID == unit.networkID then
+			return enemydata.LastSeen
+			--return MapPositionGos:inBush(enemydata.LastSeen)
+		end
+	end
+end
+
+function VisionHandler:GetMissing()
+	local missings = {}
+	for i, enemydata in pairs(self.EnemyDatas) do
+		if not IsVisible(enemydata.Hero) and GetGameTimer() - self:LastSeenTime(enemydata.Hero) <= 1 then
+			table.insert(missings, enemydata)
+		end
+	end
+	return missings
+end
+
+function VisionHandler:UseTrinket(pos)
+	local itemconstants = {ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}
+
+	if myHero:DistanceTo(pos) <= skills.W.range and CanCast(myHero, 1) then
+		CastSkillShot(1, pos)
+		return
+	end
+
+	for _, item in pairs(itemconstants) do
+		if GetItemID(myHero, item) == self.DefaultTrinketID then
+			if myHero:DistanceTo(pos) <= 900 then
+				CastSkillShot(item, pos)
+			end
+		elseif GetItemID(myHero, item) == self.BlueTrinketID then
+			if myHero:DistanceTo(pos) <= GetRange(myHero)*2 then
+				CastSkillShot(item, pos)
+			end
+		end
+	end
+end
+
+function VisionHandler:WardMissing()
+	local missings = self:GetMissing()
+
+	for i, enemydata in pairs(missings) do
+		self:UseTrinket(GetOrigin(enemydata.Hero))
+	end
 end
 
 class "autolevel"
@@ -346,6 +442,8 @@ end
 
 OnLoad(function()
 	TwitchMessage("loaded!")
+	vishandle = VisionHandler()
+	print(vishandle)
 	autolevel()
 	local orbwalker =  {"Disabled", "IOW", "DAC", "Platywalk", "GoSWalk"}
 	orbwalker = orbwalker[mc_cfg_orb.orb:Value()]
