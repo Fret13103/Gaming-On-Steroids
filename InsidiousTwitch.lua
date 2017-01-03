@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.7
+local LocalVersion = 1.8
 
 local UpdateURL = ""
 
@@ -40,7 +40,6 @@ local mainMenu = Menu("twitch", "Insidious Twitch")
 local orbwalker = "Disabled"
 
 mainMenu:SubMenu("qconfig", "Twitch: Q")
-mainMenu.qconfig:Boolean("Youmuus", "Youmuus in combat after stealth", true)
 mainMenu.qconfig:Boolean("drawQrange", "Draw Q range", true)
 mainMenu.qconfig:Boolean("drawQmap", "Draw Q on map", true)
 
@@ -71,7 +70,6 @@ mainMenu.autolevel:Boolean("allowLeveling", "Autolevel skills", true)
 mainMenu.autolevel:Slider("skillOrder", "Skill order priority", 2, 1, 2, 1)
 mainMenu.autolevel:Info("displayOrder", "Skill order is: E")
 
-
 mainMenu:SubMenu("keyconfig", "Twitch: Keys")
 mainMenu.keyconfig:Key("combo", "Combo key", string.byte(" "))
 mainMenu.keyconfig:Key("clear", "Lane & Jungle clear", string.byte("V"))
@@ -95,6 +93,78 @@ end
 
 function EnemyData(char, lastseen, lastpos)
 	return {Hero = char, LastSeen = lastseen, LastPos = lastpos}
+end
+
+local pred = nil
+
+class "PredictMain"
+
+function PredictMain:__init()
+	self.EnemyHeroes = {}
+	for i, enemy in pairs(GetEnemyHeroes()) do
+		table.insert(self.EnemyHeroes, EnemyHero(enemy, GetGameTimer(), GetOrigin(EnemyHero), Vector(0,0,0), GetMoveSpeed(enemy) or 360))
+	end
+	OnTick(function() self:Tick() end)
+end
+
+function PredictMain:EstimateMissingPos(EnemyHero, time)
+	if EnemyHero == nil then return end
+
+	local ms = EnemyHero.LastSpeed
+	if not EnemyHero.Waypoint then return end
+	local dir = EnemyHero.Waypoint.position
+	local time = .5
+
+	if dir == nil then return end
+
+	local missingtime = GetGameTimer() - EnemyHero.LastSeen
+
+	if missingtime > 2 then return end
+
+	local vec = dir - GetOrigin(EnemyHero.Hero)
+
+	local position = (ms * vec:normalized() * time)
+
+	return EnemyHero.lastpos + position
+end
+
+function PredictMain:ProcessWaypoint(unit, waypoint)
+	for _, enemyhero in pairs(self.EnemyHeroes) do
+		if enemyhero.Hero.networkID == unit.networkID and IsVisible(unit) then
+			enemyhero.LastPos = GetOrigin(enemyhero)
+			enemyhero.Waypoint = waypoint
+			enemyhero.LastSeen = GetGameTimer()
+		end
+	end
+end
+
+function PredictMain:GetEnemyHeroObject(champ)
+	for _, enemyhero in pairs(self.EnemyHeroes) do
+		if enemyhero.Hero.networkID == champ.networkID then
+			return enemyhero
+		end
+	end
+end
+
+function PredictMain:Tick()
+	for _, enemyhero in pairs(self.EnemyHeroes) do
+		if IsVisible(enemyhero) then
+			enemyhero.LastSeen = GetGameTimer()
+			enemyhero.LastPos = GetOrigin(enemyhero)
+		end
+	end
+end
+
+class "EnemyHero"
+
+function EnemyHero:__init(champ, lastseen, lastpos, lastdestination, lastspeed)
+	self.Hero = champ
+	self.LastSeen = lastseen
+	self.LastPos = lastpos
+	self.Waypoint = lastdestination
+	self.LastSpeed = lastspeed
+
+	return {Hero = self.Hero, LastSeen = self.LastSeen, LastPos = self.LastPos, Waypoint = self.Waypoint}
 end
 
 local vishandle
@@ -160,20 +230,27 @@ function VisionHandler:GetMissing()
 	return missings
 end
 
-function VisionHandler:UseTrinket(pos)
+function VisionHandler:UseTrinket(char)
 	local itemconstants = {ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}
+	local pos = pred:EstimateMissingPos(char, .5)
 
-	if myHero:DistanceTo(pos) <= skills.W.range and CanCast(myHero, 1) then
-		CastSkillShot(1, pos)
-		return
+	if pos == nil then return end
+
+	if myHero:DistanceTo() <= skills.W.range and CanCast(myHero, 1) then
+		if myHero:DistanceTo(pos) <= skills.W.range and CanCast(myHero, 1) then
+			CastSkillShot(1, pos)
+			return
+		end
 	end
 
 	for _, item in pairs(itemconstants) do
 		if GetItemID(myHero, item) == self.DefaultTrinketID then
-			if myHero:DistanceTo(pos) <= 900 then
+			local pos = pred:EstimateMissingPos(char, .5)
+			if myHero:DistanceTo(pos) <= 600 then
 				CastSkillShot(item, pos)
 			end
 		elseif GetItemID(myHero, item) == self.BlueTrinketID then
+			local pos = pred:EstimateMissingPos(char, .5)
 			if myHero:DistanceTo(pos) <= GetRange(myHero)*2 then
 				CastSkillShot(item, pos)
 			end
@@ -185,7 +262,8 @@ function VisionHandler:WardMissing()
 	local missings = self:GetMissing()
 
 	for i, enemydata in pairs(missings) do
-		self:UseTrinket(GetOrigin(enemydata.Hero))
+		trinketdata = { delay = 0.0, speed = math.huge, width = 238, range = 3500, radius = 475},
+		self:UseTrinket(enemydata.Hero)
 	end
 end
 
@@ -443,8 +521,9 @@ end
 OnLoad(function()
 	TwitchMessage("loaded!")
 	vishandle = VisionHandler()
-	print(vishandle)
 	autolevel()
+	pred = PredictMain()
+	OnProcessWaypoint(function(unit, waypoint) pred:ProcessWaypoint(unit, waypoint) end)
 	local orbwalker =  {"Disabled", "IOW", "DAC", "Platywalk", "GoSWalk"}
 	orbwalker = orbwalker[mc_cfg_orb.orb:Value()]
 end)
@@ -534,7 +613,7 @@ OnTick(function()
 	--combo functions
 	if mainMenu.keyconfig.combo:Value() then
 		ExpungeOnStacked()
-		if not isAttacking and not hasQBuff and myHero:DistanceTo(GetCurrentTarget()) >= GetRange(myHero) then
+		if not isAttacking and not hasQBuff and myHero:DistanceTo(GetCurrentTarget()) >= GetRange(myHero) and mainMenu.wconfig.ComboW:Value() then
 			TryW()
 		end
 		Ghostblade()
