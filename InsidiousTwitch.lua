@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.8
+local LocalVersion = 1.9
 
 local UpdateURL = ""
 
@@ -91,10 +91,6 @@ function CanCast(char, slot)
 	return CanUseSpell(char, slot) == 0
 end
 
-function EnemyData(char, lastseen, lastpos)
-	return {Hero = char, LastSeen = lastseen, LastPos = lastpos}
-end
-
 local pred = nil
 
 class "PredictMain"
@@ -102,7 +98,7 @@ class "PredictMain"
 function PredictMain:__init()
 	self.EnemyHeroes = {}
 	for i, enemy in pairs(GetEnemyHeroes()) do
-		table.insert(self.EnemyHeroes, EnemyHero(enemy, GetGameTimer(), GetOrigin(EnemyHero), Vector(0,0,0), GetMoveSpeed(enemy) or 360))
+		table.insert(self.EnemyHeroes, EnemyHero(enemy, GetGameTimer(), GetOrigin(EnemyHero), GetDirection(enemy) or Vector(0,0,1), GetMoveSpeed(enemy) or 360))
 	end
 	OnTick(function() self:Tick() end)
 end
@@ -111,31 +107,19 @@ function PredictMain:EstimateMissingPos(EnemyHero, time)
 	if EnemyHero == nil then return end
 
 	local ms = EnemyHero.LastSpeed
-	if not EnemyHero.Waypoint then return end
-	local dir = EnemyHero.Waypoint.position
-	local time = .5
+	if not EnemyHero.LastDirection then print ("no direction") return end
+	local dir = EnemyHero.LastDirection
+	local time = GetGameTimer() - EnemyHero.LastSeen
 
 	if dir == nil then return end
 
 	local missingtime = GetGameTimer() - EnemyHero.LastSeen
 
-	if missingtime > 2 then return end
+	if missingtime > 2 then print("not missing PREDMAIN") return end
 
-	local vec = dir - GetOrigin(EnemyHero.Hero)
+	local vec = GetOrigin(EnemyHero.Hero) + Vector(Vector(dir):normalized() * time * ms)
 
-	local position = (ms * vec:normalized() * time)
-
-	return EnemyHero.lastpos + position
-end
-
-function PredictMain:ProcessWaypoint(unit, waypoint)
-	for _, enemyhero in pairs(self.EnemyHeroes) do
-		if enemyhero.Hero.networkID == unit.networkID and IsVisible(unit) then
-			enemyhero.LastPos = GetOrigin(enemyhero)
-			enemyhero.Waypoint = waypoint
-			enemyhero.LastSeen = GetGameTimer()
-		end
-	end
+	return vec
 end
 
 function PredictMain:GetEnemyHeroObject(champ)
@@ -151,20 +135,23 @@ function PredictMain:Tick()
 		if IsVisible(enemyhero) then
 			enemyhero.LastSeen = GetGameTimer()
 			enemyhero.LastPos = GetOrigin(enemyhero)
+			enemyhero.LastSpeed = GetMoveSpeed(enemyhero)
+			enemyhero.LastDirection = GetDirection(enemyhero)
 		end
 	end
 end
 
 class "EnemyHero"
 
-function EnemyHero:__init(champ, lastseen, lastpos, lastdestination, lastspeed)
+function EnemyHero:__init(champ, lastseen, lastpos, lastdirection, lastspeed, lasthp)
 	self.Hero = champ
 	self.LastSeen = lastseen
 	self.LastPos = lastpos
-	self.Waypoint = lastdestination
+	self.LastDirection = lastdirection
 	self.LastSpeed = lastspeed
+	self.LastHP = lasthp
 
-	return {Hero = self.Hero, LastSeen = self.LastSeen, LastPos = self.LastPos, Waypoint = self.Waypoint}
+	return {Hero = self.Hero, LastSeen = self.LastSeen, LastPos = self.LastPos, LastDirection = self.LastDirection, LastHP = self.LastHP}
 end
 
 local vishandle
@@ -179,7 +166,7 @@ function VisionHandler:__init()
 
 
 	for i, unit in pairs(GetEnemyHeroes()) do
-		table.insert(self.EnemyDatas, EnemyData(unit, GetGameTimer(), Vector(0,0,0)))
+		table.insert(self.EnemyDatas, EnemyHero(unit, GetGameTimer(), Vector(0,0,0), GetDirection(unit) or Vector(0,0,1), 300, unit.health))
 	end
 
 	OnTick(function() self:Tick() end)
@@ -202,10 +189,14 @@ function VisionHandler:Tick()
 			if enemydata.Hero.networkID == enemy.networkID then
 				contains = true
 				enemydata.LastSeen = GetGameTimer()
+				enemydata.LastPos = GetOrigin(enemy)
+				enemydata.LastSpeed = GetMoveSpeed(enemy)
+				enemydata.LastDirection = GetDirection(enemy)
+				enemydata.LastHP = enemy.health
 			end
 		end
 		if contains == false then
-			table.insert(self.EnemyDatas, EnemyData(unit, GetGameTimer(), GetOrigin(enemy)))
+			table.insert(self.EnemyDatas, EnemyHero(unit, GetGameTimer(), GetOrigin(enemy), GetDirection(enemy), 300, enemy.health))
 		end
 	end
 	self:WardMissing()
@@ -223,20 +214,20 @@ end
 function VisionHandler:GetMissing()
 	local missings = {}
 	for i, enemydata in pairs(self.EnemyDatas) do
-		if not IsVisible(enemydata.Hero) and GetGameTimer() - self:LastSeenTime(enemydata.Hero) <= 1 then
+		if not IsVisible(enemydata.Hero) and GetGameTimer() - self:LastSeenTime(enemydata.Hero) <= .5 then
 			table.insert(missings, enemydata)
 		end
 	end
 	return missings
 end
 
-function VisionHandler:UseTrinket(char)
+function VisionHandler:UseTrinket(enemyhero)
 	local itemconstants = {ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}
-	local pos = pred:EstimateMissingPos(char, .5)
+	if enemyhero.LastHP <= 0 then return end
+	local pos = pred:EstimateMissingPos(enemyhero, GetGameTimer() - enemyhero.LastSeen)
+	if pos == nil then print("Insidious Twitch Debug - VISIONHANDLER:USETRINKET ~ nil pos") return end
 
-	if pos == nil then return end
-
-	if myHero:DistanceTo() <= skills.W.range and CanCast(myHero, 1) then
+	if myHero:DistanceTo(pos) <= skills.W.range and CanCast(myHero, 1) then
 		if myHero:DistanceTo(pos) <= skills.W.range and CanCast(myHero, 1) then
 			CastSkillShot(1, pos)
 			return
@@ -245,13 +236,11 @@ function VisionHandler:UseTrinket(char)
 
 	for _, item in pairs(itemconstants) do
 		if GetItemID(myHero, item) == self.DefaultTrinketID then
-			local pos = pred:EstimateMissingPos(char, .5)
 			if myHero:DistanceTo(pos) <= 600 then
 				CastSkillShot(item, pos)
 			end
 		elseif GetItemID(myHero, item) == self.BlueTrinketID then
-			local pos = pred:EstimateMissingPos(char, .5)
-			if myHero:DistanceTo(pos) <= GetRange(myHero)*2 then
+			if myHero:DistanceTo(pos) <= 2000 then
 				CastSkillShot(item, pos)
 			end
 		end
@@ -262,8 +251,10 @@ function VisionHandler:WardMissing()
 	local missings = self:GetMissing()
 
 	for i, enemydata in pairs(missings) do
-		trinketdata = { delay = 0.0, speed = math.huge, width = 238, range = 3500, radius = 475},
-		self:UseTrinket(enemydata.Hero)
+		trinketdata = { delay = 0.0, speed = math.huge, width = 238, range = 3500, radius = 475}
+		if enemydata.LastHP > 0 then
+			self:UseTrinket(enemydata)
+		end
 	end
 end
 
@@ -523,7 +514,6 @@ OnLoad(function()
 	vishandle = VisionHandler()
 	autolevel()
 	pred = PredictMain()
-	OnProcessWaypoint(function(unit, waypoint) pred:ProcessWaypoint(unit, waypoint) end)
 	local orbwalker =  {"Disabled", "IOW", "DAC", "Platywalk", "GoSWalk"}
 	orbwalker = orbwalker[mc_cfg_orb.orb:Value()]
 end)
@@ -636,7 +626,7 @@ end)
 OnProcessSpellComplete(function(unit, spell)
 	if unit == myHero and spell.name:find("Attack") then
 		isAttacking = false
-		if mainMenu.keyconfig.combo:Value() then
+		if mainMenu.keyconfig.combo:Value() and mainMenu.wconfig.ComboW:Value() then
 			TryW()
 		end
 	end
