@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 1.9
+local LocalVersion = 2
 
 local UpdateURL = ""
 
@@ -13,7 +13,7 @@ end
 AutoUpdater(LocalVersion, 
  true, 
  "raw.githubusercontent.com", 
- "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.ver.lua", 
+ "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.ver.lua".. "?no-cache=".. math.random(9999, 1001020201), 
  "/Fret13103/Gaming-On-Steroids/master/InsidiousTwitch.lua".. "?no-cache=".. math.random(9999, 1001020201), 
  SCRIPT_PATH .. "InsidiousTwitch.lua", 
  function() TwitchMessage("Update completed successfully!") return end, 
@@ -42,6 +42,7 @@ local orbwalker = "Disabled"
 mainMenu:SubMenu("qconfig", "Twitch: Q")
 mainMenu.qconfig:Boolean("drawQrange", "Draw Q range", true)
 mainMenu.qconfig:Boolean("drawQmap", "Draw Q on map", true)
+mainMenu.qconfig:Boolean("drawQwarnings", "Draw Q warnings", true)
 
 mainMenu:SubMenu("econfig", "Twitch: E")
 mainMenu.econfig:Boolean("KillE", "Use E to kill champions", true)
@@ -358,13 +359,47 @@ function DrawQDistanceMinimap()
 	if not hasQBuff then
 		lastQCastTime = GetGameTimer()
 	end
-	if not hasQBuff then
-		lastQCastTime = GetGameTimer()
-	end
+
 	local qtimeleft = --[[qduration[GetCastLevel(myHero, 0)] - (qduration[GetCastLevel(myHero, 0)] -]] qduration[GetCastLevel(myHero, 0)] - (GetGameTimer() - lastQCastTime)
 	local distleft = qtimeleft * GetMoveSpeed(myHero)
 
 	DrawCircleMinimap(GetOrigin(myHero), distleft, GoS.White)
+end
+
+function DrawQVisionCircle()
+	if not mainMenu.qconfig.drawQwarnings:Value() then return end
+	if GetCastLevel(myHero,0) == 0 then return end
+	if not hasQBuff then return end
+
+	for _, enemy in pairs(GetEnemyHeroes()) do
+		if ValidTarget(enemy, 900) then
+			DrawCircle(GetOrigin(enemy), 700, 5, 10, GoS.Red)
+			local wtsdata = WorldToScreen(1, GetOrigin(enemy))
+			if wtsdata.flag == true then
+				DrawText("Unit can almost see you", 30, wtsdata.x-40, wtsdata.y-20, GoS.White)
+			end
+		end
+	end
+
+	local qtimeleft = qduration[GetCastLevel(myHero, 0)] - (GetGameTimer() - lastQCastTime)
+	-- DrawText(string,size,x,y,Color)
+	local distleft = qtimeleft * GetMoveSpeed(myHero)
+	local unitvec = Vector(GetDirection(myHero)):normalized()
+	textpos3d = GetOrigin(myHero) + (unitvec * 700)
+	local datas = WorldToScreen(1, textpos3d)
+	if datas.flag == true then
+		DrawText("Q timer: " .. qtimeleft, 24, datas.x, datas.y - 20, GoS.White)
+	end
+
+	for _, tower in pairs(GetTurrets()) do
+		if tower.team ~= myHero.team then
+			if myHero:DistanceTo(tower) <= 1600 then
+				DrawCircle(GetOrigin(tower), 1300, 10, 10, GoS.Red)
+			end
+		end
+	end
+
+
 end
 
 function Ghostblade()
@@ -634,6 +669,7 @@ end)
 
 OnDraw(function()
 	DrawQDistanceAvailable()
+	DrawQVisionCircle()
 	for i, enemy in pairs(GetEnemyHeroes()) do
 		if ValidTarget(enemy) and CanCast(myHero, 2) and findBuffUnit(enemy) then
 
