@@ -1,11 +1,32 @@
 local myHero = GetMyHero()
 if myHero.charName ~= "KogMaw" then return end
 
+local LocalVersion = 0
+
+function KogMessage(msg)
+	print("<font color=\"#00f0ff\"><b>Insidious Kogmaw:</b></font><font color=\"#ffffff\"> "..msg.."</font>")
+end
+
+AutoUpdater(LocalVersion, 
+ true, 
+ "raw.githubusercontent.com", 
+ "/Fret13103/Gaming-On-Steroids/master/InsidiousKogmaw.ver.lua".. "?no-cache=".. math.random(9999, 1001020201), 
+ "/Fret13103/Gaming-On-Steroids/master/InsidiousKogmaw.lua".. "?no-cache=".. math.random(9999, 1001020201), 
+ SCRIPT_PATH .. "InsidiousKogmaw.lua", 
+ function() KogMessage("Update completed successfully - 2x f6 to reload script!") return end, 
+ function() KogMessage("You are up to date!") return end, 
+ function() KogMessage("Update found - starting update, please do not restart the lol client!") return end, 
+ function() KogMessage("Failed to update!") return end)
+
 local Q = {delay = .25, speed=1425, width=70, range=1200}
 local E = {delay = .25, speed=1300, width=120, range=1300}
 local R = {delay= .7, speed=math.huge, width = 75, radius=150, range= 1200}
 
 local itemconstants = {ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}
+
+local items = {trinket = 3363, bork = 3153, cutlass = 3144, youmuus = 3142}
+
+
 local mainMenu = Menu("kogmaw", "Insidious KogMaw") 
 
 mainMenu:SubMenu("qconfig", "KogMaw: Q")
@@ -68,8 +89,176 @@ local lastAAMinion = nil
 
 local LaneClearMode = 1
 
+local pred = nil
+local shop = nil
+
 function CanCast(champ, slot)
 	return IsReady(slot)
+end
+
+class "PredictMain"
+
+function PredictMain:__init()
+	self.EnemyHeroes = {}
+	for i, enemy in pairs(GetEnemyHeroes()) do
+		table.insert(self.EnemyHeroes, EnemyHero(enemy, GetGameTimer(), GetOrigin(EnemyHero), GetDirection(enemy) or Vector(0,0,1), GetMoveSpeed(enemy) or 360))
+	end
+	OnTick(function() self:Tick() end)
+end
+
+function PredictMain:EstimateMissingPos(EnemyHero, time)
+	if EnemyHero == nil then return end
+
+	local ms = EnemyHero.LastSpeed
+	if not EnemyHero.LastDirection then print ("no direction") return end
+	local dir = EnemyHero.LastDirection
+	local time = GetGameTimer() - EnemyHero.LastSeen
+
+	if dir == nil then return end
+
+	local missingtime = GetGameTimer() - EnemyHero.LastSeen
+
+	if missingtime > 2 then print("not missing PREDMAIN") return end
+
+	local vec = GetOrigin(EnemyHero.Hero) + Vector(Vector(dir):normalized() * time * ms)
+
+	return vec
+end
+
+function PredictMain:GetEnemyHeroObject(champ)
+	for _, enemyhero in pairs(self.EnemyHeroes) do
+		if enemyhero.Hero.networkID == champ.networkID then
+			return enemyhero
+		end
+	end
+end
+
+function PredictMain:Tick()
+	for _, enemyhero in pairs(self.EnemyHeroes) do
+		if IsVisible(enemyhero) then
+			enemyhero.LastSeen = GetGameTimer()
+			enemyhero.LastPos = GetOrigin(enemyhero)
+			enemyhero.LastSpeed = GetMoveSpeed(enemyhero)
+			enemyhero.LastDirection = GetDirection(enemyhero)
+		end
+	end
+end
+
+class "EnemyHero"
+
+function EnemyHero:__init(champ, lastseen, lastpos, lastdirection, lastspeed, lasthp)
+	self.Hero = champ
+	self.LastSeen = lastseen
+	self.LastPos = lastpos
+	self.LastDirection = lastdirection
+	self.LastSpeed = lastspeed
+	self.LastHP = lasthp
+
+	return {Hero = self.Hero, LastSeen = self.LastSeen, LastPos = self.LastPos, LastDirection = self.LastDirection, LastHP = self.LastHP}
+end
+
+local vishandle
+
+class "VisionHandler"
+
+function VisionHandler:__init()
+	self.VisibleEnemies = {}
+	self.EnemyDatas = {}
+	self.BlueTrinketID = 3363
+	self.DefaultTrinketID = 3340
+
+
+	for i, unit in pairs(GetEnemyHeroes()) do
+		table.insert(self.EnemyDatas, EnemyHero(unit, GetGameTimer(), Vector(0,0,0), GetDirection(unit) or Vector(0,0,1), 300, unit.health))
+	end
+
+	OnTick(function() self:Tick() end)
+end
+
+function VisionHandler:GetVisibleEnemies()
+	local visibles = {}
+	for i, unit in pairs(GetEnemyHeroes()) do
+		if unit.visible then
+			table.insert(visibles, unit)
+		end
+	end
+	return visibles
+end
+
+function VisionHandler:Tick()
+	for _, enemy in pairs(self:GetVisibleEnemies()) do
+		local contains = false
+		for i, enemydata in pairs(self.EnemyDatas) do
+			if enemydata.Hero.networkID == enemy.networkID then
+				contains = true
+				enemydata.LastSeen = GetGameTimer()
+				enemydata.LastPos = GetOrigin(enemy)
+				enemydata.LastSpeed = GetMoveSpeed(enemy)
+				enemydata.LastDirection = GetDirection(enemy)
+				enemydata.LastHP = enemy.health
+			end
+		end
+		if contains == false then
+			table.insert(self.EnemyDatas, EnemyHero(unit, GetGameTimer(), GetOrigin(enemy), GetDirection(enemy), 300, enemy.health))
+		end
+	end
+	self:WardMissing()
+end
+
+function VisionHandler:LastSeenTime(unit)
+	for _, enemydata in pairs(self.EnemyDatas) do
+		if enemydata.Hero.networkID == unit.networkID then
+			return enemydata.LastSeen
+			--return MapPositionGos:inBush(enemydata.LastSeen)
+		end
+	end
+end
+
+function VisionHandler:GetMissing()
+	local missings = {}
+	for i, enemydata in pairs(self.EnemyDatas) do
+		if not IsVisible(enemydata.Hero) and GetGameTimer() - self:LastSeenTime(enemydata.Hero) <= .5 then
+			table.insert(missings, enemydata)
+		end
+	end
+	return missings
+end
+
+function VisionHandler:UseTrinket(enemyhero)
+	local itemconstants = {ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}
+	if enemyhero.LastHP <= 0 then return end
+	local pos = pred:EstimateMissingPos(enemyhero, ((GetGameTimer() - enemyhero.LastSeen) + .6))
+	if pos == nil then print("Insidious Kog Debug - VISIONHANDLER:USETRINKET ~ nil pos") return end
+
+	if myHero:DistanceTo(pos) <= R.range and CanCast(myHero, 1) then
+		if myHero:DistanceTo(pos) <= R.range and CanCast(myHero, 1) then
+			CastSkillShot(3, pos)
+			return
+		end
+	end
+
+	for _, item in pairs(itemconstants) do
+		if GetItemID(myHero, item) == self.DefaultTrinketID then
+			if myHero:DistanceTo(pos) <= 600 then
+				CastSkillShot(item, pos)
+			end
+		elseif GetItemID(myHero, item) == self.BlueTrinketID then
+			if myHero:DistanceTo(pos) <= 2000 then
+				CastSkillShot(item, pos)
+			end
+		end
+	end
+end
+
+function VisionHandler:WardMissing()
+	local missings = self:GetMissing()
+
+	for i, enemydata in pairs(missings) do
+		trinketdata = { delay = 0.0, speed = math.huge, width = 238, range = 3500, radius = 475}
+		if enemydata.LastHP > 0 then
+			self:UseTrinket(enemydata)
+		end
+	end
 end
 
 class "autolevel"
@@ -95,6 +284,22 @@ function qDmg(unit, timer)
 	if not CanCast(myHero, 0) then return 0 end
 
 	return CalcDamage(myHero, unit, 0 , Dmg)
+end
+
+function Ghostblade()
+	for i, item in pairs(itemconstants) do
+		local bork = nil
+		if GetItemID(myHero, item) == items.bork then
+			bork = item
+		elseif GetItemID(myHero, item) == items.cutlass then
+			bork = item
+		end
+		if bork ~= nil then
+			if CanCast(myHero, item) == 0 and ValidTarget(GetCurrentTarget()) then
+				CastTargetSpell(GetCurrentTarget(), item)
+			end
+		end
+	end
 end
 
 function KogmawPredict(unit, slot)
@@ -272,13 +477,26 @@ function KogMawClear()
 end
 
 OnLoad(function()
+	vishandle = VisionHandler()
 	autolevel()
+	pred = PredictMain()
+end)
+
+OnObjectLoad(function(object)
+	if object.type == Obj_AI_Shop and object.team == myHero.team then
+		shop = object
+	end
 end)
 
 OnTick(function()
 	local target = GetCurrentTarget()
 
+	if shop and myHero:DistanceTo(shop) <= 1000 and GetLevel(myHero) >= 9 then
+		BuyItem(items.trinket)
+	end
+
 	if mainMenu.keyconfig.combo:Value() then
+		Ghostblade()
 		KogMawCombo(target)
 	elseif mainMenu.keyconfig.harass:Value() then
 		KogMawHarass(target)
