@@ -1,7 +1,7 @@
 local myHero = GetMyHero()
 if myHero.charName ~= "KogMaw" then return end
 
-local LocalVersion = 0
+local LocalVersion = 0.1
 
 function KogMessage(msg)
 	print("<font color=\"#00f0ff\"><b>Insidious Kogmaw:</b></font><font color=\"#ffffff\"> "..msg.."</font>")
