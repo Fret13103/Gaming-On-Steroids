@@ -86,6 +86,7 @@ function Chogath:LoadMenu()
 	
 	self.Menu:MenuElement({type = MENU,id = "LaneClear",name = "LaneClear Settings"})
 	self.Menu.LaneClear:MenuElement({id = "Enable",name = "Use spells to clear ",value = true})
+	self.Menu.LaneClear:MenuElement({id = "MinMana",name = "Don't use spells if mana% goes below",value = 40,min = 0,max = 100, step = 1})
 	self.Menu.LaneClear:MenuElement({id = "UseQ",name = "Use Q",value = true})
 	self.Menu.LaneClear:MenuElement({id = "MinHitQ",name = "Q to hit x number of minions",value = 4,min = 1,max = 7, step = 1})
 	self.Menu.LaneClear:MenuElement({id = "UseW",name = "Use W",value = false})
