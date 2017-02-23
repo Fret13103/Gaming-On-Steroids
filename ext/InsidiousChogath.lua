@@ -15,6 +15,7 @@ local ENEMY, JUNGLE, ALLY = 1,2,3
 local Q = {Range = 1000, Delay = .65, Radius = 200, Speed = math.huge, Type="Circle"}
 local W = {Range = 675, Delay = 0, Radius = 100, Speed = math.huge, Angle = 60}
 local E = {Range = 500}
+local R = {Range = 175}
 
 function CanCast(spell)
 	return Game.CanUseSpell(spell) == READY
@@ -44,7 +45,7 @@ function CountEnemiesInRange(vector, objlist)
 	return count
 end
 
-local R = {Range = 175}
+
 
 class "Chogath"
 
@@ -88,9 +89,7 @@ function Chogath:LoadMenu()
 	self.Menu.LaneClear:MenuElement({id = "UseQ",name = "Use Q",value = true})
 	self.Menu.LaneClear:MenuElement({id = "MinHitQ",name = "Q to hit x number of minions",value = 4,min = 1,max = 7, step = 1})
 	self.Menu.LaneClear:MenuElement({id = "UseW",name = "Use W",value = false})
-	self.Menu.LaneClear:MenuElement({id = "MinHitW",name = "Q to hit x number of minions",value = 4,min = 1,max = 7, step = 1})
-	self.Menu.LaneClear:MenuElement({id = "UseE",name = "Use E",value = true})
-	self.Menu.LaneClear:MenuElement({id = "MinMana",name = "Don't use spells if mana% goes below",value = 30,min = 0,max = 100, step = 1})
+	self.Menu.LaneClear:MenuElement({id = "MinHitW",name = "W to hit x number of minions",value = 4,min = 1,max = 7, step = 1})
 	
 	self.Menu:MenuElement({type = MENU,id = "Drawing",name = "Drawing Settings"})
 	self.Menu.Drawing:MenuElement({id = "DrawQ",name = "Draw Q Range",value = true})
@@ -100,8 +99,8 @@ end
 function Chogath:IsMarkeredTarget(unit)
 	local ultDmgs = {300, 475, 650}
 	local lvl = myHero:GetSpellData(3) and myHero:GetSpellData(3).level or 0
-	local Dmg = ultDmgs[lvl] + myHero.ap*.7
-	print(tostring(Dmg>unit.health))
+	local baseHealths = {574, 632, 692, 756, 822, 890, 962, 1036, 1114, 1194, 1276, 1362, 1450, 1542, 1636, 1732, 1832, 1934}
+	local Dmg = ultDmgs[lvl] + myHero.ap*.5 + (myHero.health - baseHealths[myHero.levelData.lvl]*.1)
 	return Dmg > unit.health
 end
 
@@ -243,6 +242,7 @@ end
 function Chogath:Tick()
 	self:CheckUlt()
 	self:AutoQKnock()
+	--Control.CastSpell(HK_R, myHero)
 end
 
 function Chogath:Draw()
