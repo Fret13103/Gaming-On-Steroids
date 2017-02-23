@@ -100,7 +100,7 @@ function Chogath:IsMarkeredTarget(unit)
 	local ultDmgs = {300, 475, 650}
 	local lvl = myHero:GetSpellData(3) and myHero:GetSpellData(3).level or 0
 	local baseHealths = {574, 632, 692, 756, 822, 890, 962, 1036, 1114, 1194, 1276, 1362, 1450, 1542, 1636, 1732, 1832, 1934}
-	local Dmg = ultDmgs[lvl] + myHero.ap*.5 + (myHero.health - (baseHealths[myHero.levelData.lvl])*.1
+	local Dmg = ultDmgs[lvl] + myHero.ap*.5 + (myHero.health - (baseHealths[myHero.levelData.lvl]))*.1
 	return Dmg > unit.health
 end
 
