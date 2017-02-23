@@ -12,12 +12,36 @@ end
 local Ts = TargetSelector
 local Pred = Prediction
 local ENEMY, JUNGLE, ALLY = 1,2,3
-local Q = {Range = 1000, Delay = .65, Radius = 100, Speed = math.huge, Type="Circle"}
+local Q = {Range = 1000, Delay = .65, Radius = 200, Speed = math.huge, Type="Circle"}
 local W = {Range = 675, Delay = 0, Radius = 100, Speed = math.huge, Angle = 60}
 local E = {Range = 500}
 
 function CanCast(spell)
 	return Game.CanUseSpell(spell) == READY
+end
+
+function CountEnemiesInRange(vector, objlist)
+	local Enemies = {}
+	local count = 0
+	if objlist == nil then
+		for i =1, Game.HeroCount() do
+			local hero = Game.Hero(i)
+			if not hero.isAlly then
+				table.insert(Enemies, hero)
+			end
+		end
+		objlist = Enemies
+	end
+
+	for i, enemy in pairs(objlist) do
+		if ValidTarget(enemy) then
+			if vector:DistanceTo(Vector(enemy.pos)) <= Q.Radius then
+				count = count + 1
+			end
+		end
+	end
+
+	return count
 end
 
 local R = {Range = 175}
@@ -47,6 +71,8 @@ function Chogath:LoadMenu()
 
 	self.Menu:MenuElement({type = MENU,id = "Combo",name = "Combo Settings"})
 	self.Menu.Combo:MenuElement({id = "UseQ",name = "Use Q",value = true})
+	self.Menu.Combo:MenuElement({id = "AutoQ",name = "Use Q automatically to knock up enemies",value = true})
+	self.Menu.Combo:MenuElement({id = "AutoQNum",name = "Number of enemies to knock up",value = 3,min = 1,max = 5, step = 1})
 	self.Menu.Combo:MenuElement({id = "UseW",name = "Use W",value = true})
 	self.Menu.Combo:MenuElement({id = "UseE",name = "Use E",value = true})
 	self.Menu.Combo:MenuElement({id = "UseR",name = "Use R",value = true})
@@ -110,6 +136,23 @@ function Chogath:CheckUlt()
 	end
 end
 
+function Chogath:AutoQKnock()
+	if not CanCast(_Q) then return end
+	if not self.Menu.Combo.AutoQ:Value() then return end
+
+	local min = self.Menu.Combo.AutoQNum:Value()
+
+	for i, enemy in pairs(self.Enemies) do
+		if ValidTarget(enemy, 1200) then
+			local num = CountEnemiesInRange(Vector(enemy.pos))
+			if num >= min then
+				self:CastQ(enemy)
+				return
+			end
+		end
+	end
+end
+
 function Chogath:OnActiveMode(OW, Minions)
 	if OW.Mode == "Combo" then
 		self:Combo(OW,Minions)
@@ -156,10 +199,11 @@ function Chogath:Harass(OW, Minions)
 end
 
 function Chogath:Clear(OW, Minions)
-	if Minions == nil then return end 
+	if Minions == nil then return end
+
 	if myHero.mana < myHero.maxMana/100 * self.Menu.LaneClear.MinMana:Value()  then return end
 	for _, minion in pairs(Minions[ENEMY]) do
-		if ValidTarget(minion, 650) and CanCast(_Q) then
+		if ValidTarget(minion, 650) and CanCast(_W) then
 			local hitby = {minion}
 
 			for i, creep in pairs(Minions[ENEMY]) do
@@ -183,24 +227,22 @@ function Chogath:Clear(OW, Minions)
 				self:CastW(minion)
 			end
 		end
-		if ValidTarget(minion, 1200) and CanCast(_W) then
-			local hitby = {minion}
-
-			for i, creep in pairs(Minions[ENEMY]) do
-				if creep ~= minion and ValidTarget(creep) and creep.pos:DistanceTo(minion.pos) <= Q.Radius then
-					table.insert(hitby, creep)
+		if ValidTarget(minion, 1200) and CanCast(_Q) then
+			for i, v in pairs(Minions[ENEMY]) do
+				if ValidTarget(v, Q.Range) then
+					local num = CountEnemiesInRange(Vector(v.pos), Minions[ENEMY])
+					if num >= self.Menu.LaneClear.MinHitQ:Value() and self.Menu.LaneClear.UseQ:Value() then
+						self:CastQ(minion)
+					end
 				end
-			end
-
-			if #hitby >= self.Menu.LaneClear.MinHitQ:Value() and self.Menu.LaneClear.UseQ:Value() then
-				self:CastQ(minion)
-			end
+			end 
 		end
 	end
 end
 
 function Chogath:Tick()
 	self:CheckUlt()
+	self:AutoQKnock()
 end
 
 function Chogath:Draw()
