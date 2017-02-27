@@ -165,7 +165,7 @@ function Amumu:LoadMenu()
 	self.Menu.Drawing:MenuElement({id = "DrawQ",name = "Draw Q Range",value = true})
 	self.Menu.Drawing:MenuElement({id = "DrawR",name = "Draw R Range",value = false})
 
-	self.Menu.Combo:MenuElement({id = "SaveMana",name = "Turn off W to save mana if it isn't dealing damage",value = true})
+	self.Menu:MenuElement({id = "SaveMana",name = "Turn off W to save mana if it isn't dealing damage",value = true})
 end
 
 function Amumu:GetTarget(range)

@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Twitch" then return end
 
-local LocalVersion = 2
+local LocalVersion = 2.1
 
 local UpdateURL = ""
 
@@ -411,7 +411,7 @@ function Ghostblade()
 			bork = item
 		end
 		if bork ~= nil then
-			if CanCast(myHero, item) == 0 and ValidTarget(GetCurrentTarget()) then
+			if CanCast(myHero, item) and ValidTarget(GetCurrentTarget()) then
 				CastTargetSpell(GetCurrentTarget(), item)
 			end
 		end
