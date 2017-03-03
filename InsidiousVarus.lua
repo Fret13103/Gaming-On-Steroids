@@ -2,10 +2,12 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Varus" then return end
 
-local LocalVersion = 0
+local LocalVersion = 1.01
 local UpdateURL = ""
 local pred = nil
 local vishandle = nil
+
+local LaneClearMode = 1
 
 function VarusMessage(msg)
 	print("<font color=\"#00f0ff\"><b>Insidious Varus:</b></font><font color=\"#ffffff\"> "..msg.."</font>")
@@ -17,6 +19,10 @@ local skills = {
 	R = { delay = 0.1, speed = 1850, width = 120, range = 1075}
 }
 
+local itemconstants = {ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}
+
+local items = {trinket = 3363, bork = 3153, cutlass = 3144, youmuus = 3142}
+
 local LastComboSpellTime = 0
 local IsKSChannel = false
 local shop = nil
@@ -27,10 +33,10 @@ AutoUpdater(LocalVersion,
  "/Fret13103/Gaming-On-Steroids/master/InsidiousVarus.ver.lua".. "?no-cache=".. math.random(9999, 1001020201), 
  "/Fret13103/Gaming-On-Steroids/master/InsidiousVarus.lua".. "?no-cache=".. math.random(9999, 1001020201), 
  SCRIPT_PATH .. "InsidiousVarus.lua", 
- function() TwitchMessage("Update completed successfully!") return end, 
- function() TwitchMessage("You are up to date!") return end, 
- function() TwitchMessage("Update found - starting update!") return end, 
- function() TwitchMessage("Failed to update!") return end)
+ function() VarusMessage("Update completed successfully!") return end, 
+ function() VarusMessage("You are up to date!") return end, 
+ function() VarusMessage("Update found - starting update!") return end, 
+ function() VarusMessage("Failed to update!") return end)
 
 if not pcall( require, "OpenPredict" ) then VarusMessage("Please install OpenPredict!") return end
 
@@ -47,7 +53,9 @@ mainMenu.qconfig:Info("blank", " ")
 mainMenu.qconfig:Info("separator", "Laneclear") --SEPARATOR 
 
 mainMenu.qconfig:Boolean("laneclearQ", "Use Q in laneclear", true)
-mainMenu.qconfig:Slider("hitminionsnumber", "Q to hit x minions", 4, 1, 7, 1)
+mainMenu.qconfig:Slider("QMinionsNumber", "Q to hit x minions", 3, 1, 7, 1)
+mainMenu.qconfig:Slider("QChargeTime", "Charge Q for (x) ms", 500, 1, 1500, 10)
+mainMenu.qconfig:Boolean("ShoveQ", "Use Q to shove", true)
 
 mainMenu:SubMenu("econfig", "Varus: E")
 mainMenu.econfig:Slider("estacks", "Minimum stacks on target to E", 3, 1, 3 , 1)
@@ -58,11 +66,15 @@ mainMenu.econfig:Info("blank", " ")
 mainMenu.econfig:Info("separator", "Laneclear") --SEPARATOR 
 
 mainMenu.econfig:Boolean("laneclearE", "Use E in laneclear", true)
-mainMenu.econfig:Slider("hitminionsnumber", "E to hit x minions", 4, 1, 7, 1)
+mainMenu.econfig:Slider("EMinionsNumber", "E to hit x minions", 4, 1, 7, 1)
+mainMenu.econfig:Boolean("ShoveE", "Use E to shove", true)
+mainMenu.econfig:Slider("ClearManaE", "Shove min% mana to ult", 60, 1, 100, 1)
+
 
 mainMenu:SubMenu("keyconfig", "Varus: Keys")
 mainMenu.keyconfig:Key("combo", "Combo key", string.byte(" "))
 mainMenu.keyconfig:Key("harass", "Harass key", string.byte("C"))
+mainMenu.keyconfig:Key("clear", "Lane & Jungle clear", string.byte("V"))
 
 mainMenu:SubMenu("autolevel", "Varus: Autolevel")
 mainMenu.autolevel:Boolean("allowLeveling", "Autolevel skills", true)
@@ -73,7 +85,7 @@ mainMenu.autolevel:Info("displayOrder", "Skill order is: E")
 
 local SkillOrders = {
 	{_Q,_E,_E, _Q, _Q, _R,_Q,_E,_Q,_E,_R,_E,_E,_W,_W,_R,_W,_W},
-	{_Q,_W,_W, _Q, _Q, _R,_Q,_W,_Q,_W,_R,_W,_W,_E,_E,_R,_E,_E}
+	{_Q,_W,_E, _Q, _Q, _R,_Q,_W,_Q,_W,_R,_W,_W,_E,_E,_R,_E,_E}
 }
 
 class "PredictMain"
@@ -206,13 +218,11 @@ function VisionHandler:UseTrinket(enemyhero)
 	local itemconstants = {ITEM_1, ITEM_2, ITEM_3, ITEM_4, ITEM_5, ITEM_6, ITEM_7}
 	if enemyhero.LastHP <= 0 then return end
 	local pos = pred:EstimateMissingPos(enemyhero, GetGameTimer() - enemyhero.LastSeen)
-	if pos == nil then print("Insidious Twitch Debug - VISIONHANDLER:USETRINKET ~ nil pos") return end
+	if pos == nil then print("Insidious Varus Debug - VISIONHANDLER:USETRINKET ~ nil pos") return end
 
-	if myHero:DistanceTo(pos) <= skills.W.range and CanCast(myHero, 1) then
-		if myHero:DistanceTo(pos) <= skills.W.range and CanCast(myHero, 1) then
-			CastSkillShot(1, pos)
-			return
-		end
+	if myHero:DistanceTo(pos) <= skills.E.range and CanCast(2) then
+		CastSkillShot(2, pos)
+		return
 	end
 
 	for _, item in pairs(itemconstants) do
@@ -247,9 +257,9 @@ end
 
 function autolevel:displayPriority()
 	if mainMenu.autolevel.skillOrder:Value() == 1 then
-		mainMenu.autolevel.displayOrder.name = "Skill order is: ".. "EQW"
+		mainMenu.autolevel.displayOrder.name = "Skill order is: ".. "QWE"
 	elseif mainMenu.autolevel.skillOrder:Value() == 2 then
-		mainMenu.autolevel.displayOrder.name = "Skill order is: ".. "EWQ"
+		mainMenu.autolevel.displayOrder.name = "Skill order is: ".. "QEW"
 	end
 end
 
@@ -367,6 +377,28 @@ function DrawDamageHealth(unit)
 	DrawDmgOverHpBar(unit,GetCurrentHP(unit), dmg, 0, GoS.Blue)
 end
 
+function Ghostblade()
+	for i, item in pairs(itemconstants) do
+		local bork = nil
+		if GetItemID(myHero, item) == items.bork then
+			bork = item
+		elseif GetItemID(myHero, item) == items.cutlass then
+			bork = item
+		end
+		if bork ~= nil then
+			if CanCast(item) and ValidTarget(GetCurrentTarget()) then
+				CastTargetSpell(GetCurrentTarget(), item)
+			end
+		end
+	end
+end
+
+function PrintItems()
+	for i, item in pairs(itemconstants) do
+		PrintChat(GetItemID(myHero, item))
+	end
+end
+
 --																		SCRIPT LOGICS COMBO
 
 function CanCast(slot)
@@ -448,7 +480,7 @@ function HarassQ()
 
 	if QCastData.casting then 
 		local timecasting = GetGameTimer() - QCastData.starttime
-
+		
 		if timecasting < 1 then return end
 
 		local QPredData = {delay = skills.Q.delay, speed = skills.Q.speed, width = skills.Q.width, range = CalcQRange(timecasting)}
@@ -477,6 +509,79 @@ function HarassE()
 
 	if predictinfo.hitChance >= .7 and ValidTarget(GetCurrentTarget()) then
 		CastSkillShot(_E, castpos.x, castpos.y, castpos.z)
+	end
+end
+
+--																		SCRIPT LOGICS LANECLEAR
+
+function ClearQ()
+	if not mainMenu.qconfig.laneclearQ:Value() then return end
+	if mainMenu.keyconfig.clear:Value() then
+		if not isAttacking then
+			if LaneClearMode == 2 then
+				for i, minion in pairs(minionManager.objects) do
+					if ValidTarget(minion, skills.Q.range) and mainMenu.qconfig.ShoveQ:Value() then
+
+						local vectorTo = Vector(GetOrigin(minion)) - Vector(GetOrigin(myHero))
+
+						local vectorLeft = vectorTo:perpendicular()
+						local vectorRight = vectorTo:perpendicular2()
+
+						local start = Vector(GetOrigin(myHero))
+
+						local minionsinrange = {}
+						for i, minion in pairs(minionManager.objects) do
+							if ValidTarget(minion, skills.Q.range) then
+								table.insert(minionsinrange, minion)
+							end
+						end
+
+						local timecasting
+
+						if QCastData.starttime then
+							timecasting = GetGameTimer() - QCastData.starttime
+						
+						else
+							timecasting = .1
+						end
+						
+						local minionshitbyQ = CountObjectsOnLineSegment(start, start + (vectorTo:normalized() * CalcQRange(timecasting)), skills.Q.width, minionsinrange, nil)
+						if minionshitbyQ >= mainMenu.qconfig.QMinionsNumber:Value() then
+							if not QCastData.casting then
+								CastSkillShot(0, start + (vectorTo:normalized() * skills.Q.range))
+							elseif GetGameTimer() - QCastData.starttime > (mainMenu.qconfig.QChargeTime:Value()/1000) then
+								CastSkillShot2(0, start + (vectorTo:normalized() * skills.Q.range))
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+function ClearE()
+	if not mainMenu.econfig.laneclearE:Value() then return end
+	if mainMenu.keyconfig.clear:Value() then
+		if QCastData.casting then return end
+		if not isAttacking then
+			if LaneClearMode == 2 then
+				for i, minion in pairs(minionManager.objects) do
+					if ValidTarget(minion, skills.E.range) and mainMenu.econfig.ShoveE:Value() then
+						if myHero.mana <= (myHero.maxMana /100 * mainMenu.econfig.ClearManaE:Value()) then return end
+						local minionsHit = {}
+						for i, creep in pairs(minionManager.objects) do
+							if ValidTarget(creep) and minion:DistanceTo(creep) <= skills.E.radius then
+								table.insert(minionsHit, creep)
+							end
+						end
+						if #minionsHit >= mainMenu.econfig.EMinionsNumber:Value() then
+							CastSkillShot(2, GetOrigin(minion))
+						end
+					end
+				end
+			end
+		end
 	end
 end
 
@@ -593,7 +698,13 @@ OnTick(function()
 		HarassE()
 	end
 	DoKS()
-	if mainMenu.keyconfig.combo:Value() then CastOffensiveItems(GetCurrentTarget()) end
+
+	ClearQ()
+	ClearE()
+
+	if mainMenu.keyconfig.combo:Value() then
+		Ghostblade()
+	end
 
 	if shop and myHero:DistanceTo(shop) <= 1000 and GetLevel(myHero) >= 9 then
 		BuyItem(items.trinket)
@@ -602,6 +713,16 @@ end)
 
 OnDraw(function()
 	DrawQRange()
+	textpos3d = GetOrigin(myHero)
+	local datas = WorldToScreen(1, textpos3d)
+	if datas.flag == true and mainMenu.keyconfig.clear:Value() then
+		if LaneClearMode == 1 then
+			DrawText("Laneclear mode: aa clear", 24, datas.x, datas.y, GoS.White)
+		else 
+			DrawText("Laneclear mode: shove", 24, datas.x, datas.y, GoS.White)
+		end
+		--DrawText("IsAttacking: " .. tostring(isAttacking), 24, datas.x, datas.y - 20, GoS.White)
+	end
 	for _, enemy in pairs(GetEnemyHeroes()) do
 		DrawDamageHealth(enemy)
 		if ComboWillKill(enemy) and IsVisible(enemy) then
@@ -616,4 +737,16 @@ OnLoad(function()
 	vishandle = VisionHandler()
 	pred = PredictMain()
 	autolevel()
+end)
+
+OnWndMsg(function(Msg, Key)
+	if Msg == KEY_DOWN then
+		if not mainMenu.keyconfig.clear:Value() then return end
+
+		if Key == 38 then
+			LaneClearMode = 2
+		elseif Key == 40 then
+			LaneClearMode = 1
+		end
+	end
 end)
