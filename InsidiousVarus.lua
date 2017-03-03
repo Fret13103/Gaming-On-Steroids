@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Varus" then return end
 
-local LocalVersion = 1.01
+local LocalVersion = 1.02
 local UpdateURL = ""
 local pred = nil
 local vishandle = nil
