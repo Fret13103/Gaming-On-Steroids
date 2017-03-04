@@ -70,7 +70,7 @@ mainMenu.clearconfig:Slider("ClearManaE", "Shove min% mana to ult", 60, 1, 100, 
 
 mainMenu:SubMenu("misc", "Varus: Miscellaneous")
 mainMenu.misc:DropDown("drawPos", "Where on screen to draw text: ", 1, {"On myHero", "Topleft corner", "Topright corner", "Above minimap"}, function() print("changed draw pos") end, false)
-mainMenu.misc:Boolean("disableStacks", "Use abilities ignoring stacks on enemy", false)
+mainMenu.misc:Boolean("disableStacks", "Use abilities at 0 w stacks", false)
 
 mainMenu:SubMenu("keyconfig", "Varus: Keys")
 mainMenu.keyconfig:Key("combo", "Combo key", string.byte(" "))
