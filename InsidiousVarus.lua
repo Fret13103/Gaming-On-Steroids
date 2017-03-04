@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Varus" then return end
 
-local LocalVersion = 1.03
+local LocalVersion = 1.04
 local UpdateURL = ""
 local pred = nil
 local vishandle = nil
@@ -425,7 +425,7 @@ function ComboQ()
 		end
 		--print(predictinfo)
 	elseif ValidTarget(GetCurrentTarget()) and myHero:DistanceTo(GetCurrentTarget()) <= skills.Q.maxRange then
-		if not mainMenu.misc.disableStacks then
+		if not mainMenu.misc.disableStacks:Value() then
 			if wDatas[GetCurrentTarget().networkID] >= mainMenu.qconfig.qstacks:Value() then
 				CastSkillShot(0, GetOrigin(myHero))
 			end
