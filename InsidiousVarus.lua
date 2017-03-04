@@ -2,7 +2,7 @@ local myHero = GetMyHero()
 
 if GetObjectName(myHero) ~= "Varus" then return end
 
-local LocalVersion = 1.02
+local LocalVersion = 1.03
 local UpdateURL = ""
 local pred = nil
 local vishandle = nil
@@ -49,27 +49,28 @@ mainMenu.qconfig:Slider("qstacks", "Minimum stacks on target to Q", 3, 1, 3 , 1)
 mainMenu.qconfig:Boolean("comboq", "Use Q in combo", true)
 mainMenu.qconfig:Boolean("harassq", "Use Q in harass", true)
 
-mainMenu.qconfig:Info("blank", " ")
-mainMenu.qconfig:Info("separator", "Laneclear") --SEPARATOR 
-
-mainMenu.qconfig:Boolean("laneclearQ", "Use Q in laneclear", true)
-mainMenu.qconfig:Slider("QMinionsNumber", "Q to hit x minions", 3, 1, 7, 1)
-mainMenu.qconfig:Slider("QChargeTime", "Charge Q for (x) ms", 500, 1, 1500, 10)
-mainMenu.qconfig:Boolean("ShoveQ", "Use Q to shove", true)
-
 mainMenu:SubMenu("econfig", "Varus: E")
-mainMenu.econfig:Slider("estacks", "Minimum stacks on target to E", 3, 1, 3 , 1)
+mainMenu.econfig:Slider("estacks", "Minimum stacks on target to E", 3, 1, 3, 1)
 mainMenu.econfig:Boolean("comboe", "Use E in combo", true)
 mainMenu.econfig:Boolean("harasse", "Use E in harass", true)
 
-mainMenu.econfig:Info("blank", " ")
-mainMenu.econfig:Info("separator", "Laneclear") --SEPARATOR 
+mainMenu:SubMenu("clearconfig", "Varus: Laneclear")
+mainMenu.clearconfig:Info("blank", " ")
+mainMenu.clearconfig:Info("separator", "Q logics") --SEPARATOR 
+mainMenu.clearconfig:Boolean("laneclearQ", "Use Q in laneclear", true)
+mainMenu.clearconfig:Slider("QMinionsNumber", "Q to hit x minions", 3, 1, 7, 1)
+mainMenu.clearconfig:Slider("QChargeTime", "Charge Q for (x) ms", 500, 1, 1500, 10)
+mainMenu.clearconfig:Boolean("ShoveQ", "Use Q to shove", true)
+mainMenu.clearconfig:Info("blank", " ")
+mainMenu.clearconfig:Info("separator", "E logics") --SEPARATOR 
+mainMenu.clearconfig:Boolean("laneclearE", "Use E in laneclear", true)
+mainMenu.clearconfig:Slider("EMinionsNumber", "E to hit x minions", 4, 1, 7, 1)
+mainMenu.clearconfig:Boolean("ShoveE", "Use E to shove", true)
+mainMenu.clearconfig:Slider("ClearManaE", "Shove min% mana to ult", 60, 1, 100, 1)
 
-mainMenu.econfig:Boolean("laneclearE", "Use E in laneclear", true)
-mainMenu.econfig:Slider("EMinionsNumber", "E to hit x minions", 4, 1, 7, 1)
-mainMenu.econfig:Boolean("ShoveE", "Use E to shove", true)
-mainMenu.econfig:Slider("ClearManaE", "Shove min% mana to ult", 60, 1, 100, 1)
-
+mainMenu:SubMenu("misc", "Varus: Miscellaneous")
+mainMenu.misc:DropDown("drawPos", "Where on screen to draw text: ", 1, {"On myHero", "Topleft corner", "Topright corner", "Above minimap"}, function() print("changed draw pos") end, false)
+mainMenu.misc:Boolean("disableStacks", "Use abilities ignoring stacks on enemy", false)
 
 mainMenu:SubMenu("keyconfig", "Varus: Keys")
 mainMenu.keyconfig:Key("combo", "Combo key", string.byte(" "))
@@ -424,7 +425,11 @@ function ComboQ()
 		end
 		--print(predictinfo)
 	elseif ValidTarget(GetCurrentTarget()) and myHero:DistanceTo(GetCurrentTarget()) <= skills.Q.maxRange then
-		if wDatas[GetCurrentTarget().networkID] >= mainMenu.qconfig.qstacks:Value() then
+		if not mainMenu.misc.disableStacks then
+			if wDatas[GetCurrentTarget().networkID] >= mainMenu.qconfig.qstacks:Value() then
+				CastSkillShot(0, GetOrigin(myHero))
+			end
+		else
 			CastSkillShot(0, GetOrigin(myHero))
 		end
 	end
@@ -515,12 +520,12 @@ end
 --																		SCRIPT LOGICS LANECLEAR
 
 function ClearQ()
-	if not mainMenu.qconfig.laneclearQ:Value() then return end
+	if not mainMenu.clearconfig.laneclearQ:Value() then return end
 	if mainMenu.keyconfig.clear:Value() then
 		if not isAttacking then
 			if LaneClearMode == 2 then
 				for i, minion in pairs(minionManager.objects) do
-					if ValidTarget(minion, skills.Q.range) and mainMenu.qconfig.ShoveQ:Value() then
+					if ValidTarget(minion, skills.Q.range) and mainMenu.clearconfig.ShoveQ:Value() then
 
 						local vectorTo = Vector(GetOrigin(minion)) - Vector(GetOrigin(myHero))
 
@@ -546,10 +551,10 @@ function ClearQ()
 						end
 						
 						local minionshitbyQ = CountObjectsOnLineSegment(start, start + (vectorTo:normalized() * CalcQRange(timecasting)), skills.Q.width, minionsinrange, nil)
-						if minionshitbyQ >= mainMenu.qconfig.QMinionsNumber:Value() then
+						if minionshitbyQ >= mainMenu.clearconfig.QMinionsNumber:Value() then
 							if not QCastData.casting then
 								CastSkillShot(0, start + (vectorTo:normalized() * skills.Q.range))
-							elseif GetGameTimer() - QCastData.starttime > (mainMenu.qconfig.QChargeTime:Value()/1000) then
+							elseif GetGameTimer() - QCastData.starttime > (mainMenu.clearconfig.QChargeTime:Value()/1000) then
 								CastSkillShot2(0, start + (vectorTo:normalized() * skills.Q.range))
 							end
 						end
@@ -561,21 +566,21 @@ function ClearQ()
 end
 
 function ClearE()
-	if not mainMenu.econfig.laneclearE:Value() then return end
+	if not mainMenu.clearconfig.laneclearE:Value() then return end
 	if mainMenu.keyconfig.clear:Value() then
 		if QCastData.casting then return end
 		if not isAttacking then
 			if LaneClearMode == 2 then
 				for i, minion in pairs(minionManager.objects) do
-					if ValidTarget(minion, skills.E.range) and mainMenu.econfig.ShoveE:Value() then
-						if myHero.mana <= (myHero.maxMana /100 * mainMenu.econfig.ClearManaE:Value()) then return end
+					if ValidTarget(minion, skills.E.range) and mainMenu.clearconfig.ShoveE:Value() then
+						if myHero.mana <= (myHero.maxMana /100 * mainMenu.clearconfig.ClearManaE:Value()) then return end
 						local minionsHit = {}
 						for i, creep in pairs(minionManager.objects) do
 							if ValidTarget(creep) and minion:DistanceTo(creep) <= skills.E.radius then
 								table.insert(minionsHit, creep)
 							end
 						end
-						if #minionsHit >= mainMenu.econfig.EMinionsNumber:Value() then
+						if #minionsHit >= mainMenu.clearconfig.EMinionsNumber:Value() then
 							CastSkillShot(2, GetOrigin(minion))
 						end
 					end
@@ -713,8 +718,17 @@ end)
 
 OnDraw(function()
 	DrawQRange()
-	textpos3d = GetOrigin(myHero)
-	local datas = WorldToScreen(1, textpos3d)
+	local textpos3d = GetOrigin(myHero)
+	local datas 
+	if mainMenu.misc.drawPos:Value() == 1 then
+		datas = WorldToScreen(1, textpos3d)
+	elseif mainMenu.misc.drawPos:Value() == 2 then
+		datas = {x=100, y=100, flag=true}
+	elseif mainMenu.misc.drawPos:Value() == 3 then
+		datas = {x=1680, y=70, flag=true}
+	elseif mainMenu.misc.drawPos:Value() == 4 then
+		datas = {x=1680, y=770, flag=true}
+	end
 	if datas.flag == true and mainMenu.keyconfig.clear:Value() then
 		if LaneClearMode == 1 then
 			DrawText("Laneclear mode: aa clear", 24, datas.x, datas.y, GoS.White)
